@@ -112,7 +112,7 @@
 
   /* ================= check rows ================= */
   .check-row {
-    display: flex; align-items: center; gap: 14px; width: 100%;
+    display: flex; align-items: center; gap: 14px;
     background: var(--ink-2); border: 1px solid var(--line);
     border-radius: 16px; margin: 0 12px 10px; padding: 14px;
     width: calc(100% - 24px); cursor: pointer; text-align: left; color: var(--ice);
@@ -212,78 +212,98 @@
 </style>
 
 <script>
-(function () {
-  var KEY = "trainingslog:v2";
-  var TOTAL = 8;
+(() => {
+  const KEY = "trainingslog:v2";
+  const TOTAL = 8;
 
-  var PLANS = {
-    1: { name: "Einheit 1", color: "var(--plan1)",
-         haupt: ["Rudern", "Kniebeuge", "Latziehen"], abschluss: ["Bizeps", "Rumpf"] },
-    2: { name: "Einheit 2", color: "var(--plan2)",
-         haupt: ["Bankdrücken", "Kreuzheben", "Schulterdrücken"], abschluss: ["Trizeps", "Rumpf"] }
+  const PLANS = {
+    1: { name: "Einheit 1", color: "var(--plan1)", haupt: ["Rudern", "Kniebeuge", "Latziehen"], abschluss: ["Bizeps", "Rumpf"] },
+    2: { name: "Einheit 2", color: "var(--plan2)", haupt: ["Bankdrücken", "Kreuzheben", "Schulterdrücken"], abschluss: ["Trizeps", "Rumpf"] }
   };
-  var FIELDS = [
-    { k: "wh",     label: "WH",    ph: "8" },
-    { k: "last",   label: "kg",    ph: "60" },
+  
+  const FIELDS = [
+    { k: "wh", label: "WH", ph: "8" },
+    { k: "last", label: "kg", ph: "60" },
     { k: "saetze", label: "Sätze", ph: "3" },
-    { k: "tut",    label: "TUT",   ph: "3-0-1-0" }
+    { k: "tut", label: "TUT", ph: "3-0-1-0" }
   ];
 
-  var state = { tab: "training", plan: 1, log: [], draft: null, editing: null, ready: false };
-  var app = document.getElementById("app");
+  const state = { tab: "training", plan: 1, log: [], draft: null, editing: null, ready: false };
+  const app = document.getElementById("app");
 
-  /* ---------------- storage ---------------- */
-  function load() {
-    return window.storage.get(KEY).then(function (res) {
-      if (res && res.value) {
-        var p = JSON.parse(res.value);
-        if (p && Array.isArray(p.sessions)) state.log = p.sessions.map(migrate);
+  /* ---------------- storage fallback ---------------- */
+  const db = {
+    async get(k) {
+      if (window.storage?.get) return window.storage.get(k);
+      const val = localStorage.getItem(k);
+      return val ? { value: val } : null;
+    },
+    async set(k, v) {
+      if (window.storage?.set) return window.storage.set(k, v);
+      localStorage.setItem(k, v);
+    }
+  };
+
+  async function load() {
+    try {
+      const res = await db.get(KEY);
+      if (res?.value) {
+        const p = JSON.parse(res.value);
+        if (Array.isArray(p.sessions)) state.log = p.sessions.map(migrate);
       }
-    }).catch(function () {});
+    } catch (e) {
+      console.error("Fehler beim Laden:", e);
+    }
   }
+
   function migrate(s) {
     s.done = s.done || {};
-    var cfg = PLANS[s.plan];
+    const cfg = PLANS[s.plan];
     if (!cfg) return s;
-    cfg.abschluss.forEach(function (ex) {
-      var e = s.entries && s.entries[ex];
+    cfg.abschluss.forEach(ex => {
+      const e = s.entries?.[ex];
       if (e && (e.wh || e.last || e.saetze || e.tut)) s.done[ex] = true;
       if (s.entries) delete s.entries[ex];
     });
     if (s.warmup) s.done["Warm-up"] = true;
     return s;
   }
-  function persist() { return window.storage.set(KEY, JSON.stringify({ sessions: state.log })); }
+
+  function persist() { return db.set(KEY, JSON.stringify({ sessions: state.log })); }
 
   /* ---------------- helpers ---------------- */
   function sessionsOf(plan) {
-    return state.log.filter(function (s) { return s.plan === plan; })
-                    .sort(function (a, b) { return a.nr - b.nr; });
+    return state.log.filter(s => s.plan === plan).sort((a, b) => a.nr - b.nr);
   }
-  function checkItems(plan) { return ["Warm-up"].concat(PLANS[plan].abschluss); }
+  function checkItems(plan) { return ["Warm-up", ...PLANS[plan].abschluss]; }
   function lastEntry(plan, ex, beforeNr) {
-    var list = sessionsOf(plan).filter(function (s) { return s.nr < beforeNr; });
-    for (var i = list.length - 1; i >= 0; i--) {
-      var e = list[i].entries && list[i].entries[ex];
+    const list = sessionsOf(plan).filter(s => s.nr < beforeNr);
+    for (let i = list.length - 1; i >= 0; i--) {
+      const e = list[i].entries?.[ex];
       if (e && (e.wh || e.last || e.saetze || e.tut)) return e;
     }
     return null;
   }
-  function num(v) { return parseFloat(String(v === undefined || v === null ? "" : v).replace(",", ".")); }
+  function num(v) { 
+    if (v === undefined || v === null || v === "") return NaN;
+    return parseFloat(String(v).replace(",", ".")); 
+  }
   function fmt(n) { return String(Math.round(n * 100) / 100).replace(".", ","); }
   function today() {
-    var d = new Date();
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
-  function deDate(iso) { if (!iso) return ""; var p = iso.split("-"); return p[2] + "." + p[1] + "." + p[0]; }
+  function deDate(iso) { 
+    if (!iso) return ""; 
+    const p = iso.split("-"); 
+    return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : iso; 
+  }
   function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
-    });
+    return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
   function newDraft(plan) {
-    var d = { plan: plan, nr: sessionsOf(plan).length + 1, date: today(), entries: {}, done: {}, note: "" };
-    PLANS[plan].haupt.forEach(function (ex) { d.entries[ex] = { wh: "", last: "", saetze: "", tut: "" }; });
+    const d = { plan, nr: sessionsOf(plan).length + 1, date: today(), entries: {}, done: {}, note: "" };
+    PLANS[plan].haupt.forEach(ex => { d.entries[ex] = { wh: "", last: "", saetze: "", tut: "" }; });
     return d;
   }
 
@@ -294,249 +314,251 @@
     if (!state.editing) state.draft.nr = sessionsOf(state.plan).length + 1;
 
     app.style.setProperty("--acc", PLANS[state.plan].color);
-    app.innerHTML = header() + (state.tab === "training" ? training() : history()) +
-      '<div class="toast" id="toast"></div>';
-    wire();
+    app.innerHTML = header() + (state.tab === "training" ? training() : history()) + '<div class="toast" id="toast"></div>';
   }
 
   function header() {
-    var h = '<div class="hdr"><div class="hdr-top"><span class="brand">Trainingslog</span><span class="tabs">' +
-      '<button class="tab" data-tab="training" aria-selected="' + (state.tab === "training") + '">Training</button>' +
-      '<button class="tab" data-tab="verlauf" aria-selected="' + (state.tab === "verlauf") + '">Verlauf</button>' +
-      "</span></div>";
+    let h = `<div class="hdr"><div class="hdr-top"><span class="brand">Trainingslog</span><span class="tabs">` +
+      `<button class="tab" data-tab="training" aria-selected="${state.tab === "training"}">Training</button>` +
+      `<button class="tab" data-tab="verlauf" aria-selected="${state.tab === "verlauf"}">Verlauf</button>` +
+      `</span></div>`;
     if (state.tab === "training") {
-      h += '<div class="switch">';
-      [1, 2].forEach(function (p) {
-        h += '<button class="plan-btn" data-plan="' + p + '" aria-pressed="' + (state.plan === p) + '" ' +
-             'style="--acc:' + PLANS[p].color + '"><strong>' + PLANS[p].name + "</strong>" +
-             "<span>" + sessionsOf(p).length + " / " + TOTAL + "</span></button>";
+      h += `<div class="switch">`;
+      [1, 2].forEach(p => {
+        h += `<button class="plan-btn" data-plan="${p}" aria-pressed="${state.plan === p}" style="--acc:${PLANS[p].color}">` +
+             `<strong>${PLANS[p].name}</strong><span>${sessionsOf(p).length} / ${TOTAL}</span></button>`;
       });
-      h += "</div>";
+      h += `</div>`;
     }
-    return h + "</div>";
+    return h + `</div>`;
   }
 
   function training() {
-    var d = state.draft, p = PLANS[state.plan];
-    var html = '<div class="sess"><span class="sess-no" style="color:' + p.color + '">TE ' + d.nr + "</span>" +
-      '<span class="sess-of">' + (state.editing ? "wird bearbeitet" : "von " + TOTAL) + "</span>" +
-      '<input type="date" id="date" value="' + esc(d.date) + '" aria-label="Datum der Einheit"></div>' +
-      '<div class="sess-ex">' + esc(p.haupt.join(" · ")) + "</div>";
+    const d = state.draft, p = PLANS[state.plan];
+    let html = `<div class="sess"><span class="sess-no" style="color:${p.color}">TE ${d.nr}</span>` +
+      `<span class="sess-of">${state.editing ? "wird bearbeitet" : "von " + TOTAL}</span>` +
+      `<input type="date" id="date" value="${esc(d.date)}" aria-label="Datum der Einheit"></div>` +
+      `<div class="sess-ex">${esc(p.haupt.join(" · "))}</div>` +
+      `<div class="block-label">Warm-up</div>` + checkRow("Warm-up", "Antippen, wenn erledigt") +
+      `<div class="block-label">Hauptteil</div>`;
+    
+    p.haupt.forEach(ex => { html += exCard(ex); });
 
-    html += '<div class="block-label">Warm-up</div>' + checkRow("Warm-up", "Antippen, wenn erledigt");
+    html += `<div class="block-label">Abschluss</div>`;
+    p.abschluss.forEach(ex => { html += checkRow(ex, "Antippen, wenn erledigt"); });
 
-    html += '<div class="block-label">Hauptteil</div>';
-    p.haupt.forEach(function (ex) { html += exCard(ex); });
-
-    html += '<div class="block-label">Abschluss</div>';
-    p.abschluss.forEach(function (ex) { html += checkRow(ex, "Antippen, wenn erledigt"); });
-
-    html += '<div class="block-label">Notiz</div><div class="card">' +
-      '<textarea id="note" placeholder="Wie lief die Einheit?">' + esc(d.note) + "</textarea></div>";
-
-    html += '<div class="savebar"><button class="save" id="save">' +
-      (state.editing ? "Änderungen speichern" : "TE " + d.nr + " speichern") + "</button>" +
-      (state.editing ? '<button class="save secondary" id="cancel">Bearbeiten abbrechen</button>' : "") + "</div>";
+    html += `<div class="block-label">Notiz</div><div class="card">` +
+      `<textarea id="note" placeholder="Wie lief die Einheit?">${esc(d.note)}</textarea></div>` +
+      `<div class="savebar"><button class="save" id="save">${state.editing ? "Änderungen speichern" : "TE " + d.nr + " speichern"}</button>` +
+      (state.editing ? `<button class="save secondary" id="cancel">Bearbeiten abbrechen</button>` : "") + `</div>`;
     return html;
   }
 
   function checkRow(ex, hint) {
-    var on = !!state.draft.done[ex];
-    return '<button class="check-row" data-check="' + esc(ex) + '" aria-pressed="' + on + '">' +
-      '<span class="box" aria-hidden="true">✓</span><span class="txt">' +
-      '<span class="ex-name">' + esc(ex) + "</span>" +
-      '<span class="hint">' + (on ? "Erledigt" : hint) + "</span></span></button>";
+    const on = !!state.draft.done[ex];
+    return `<button class="check-row" data-check="${esc(ex)}" aria-pressed="${on}">` +
+      `<span class="box" aria-hidden="true">✓</span><span class="txt">` +
+      `<span class="ex-name">${esc(ex)}</span>` +
+      `<span class="hint">${on ? "Erledigt" : hint}</span></span></button>`;
   }
 
   function exCard(ex) {
-    var d = state.draft;
-    var e = d.entries[ex] || (d.entries[ex] = { wh: "", last: "", saetze: "", tut: "" });
-    var prev = lastEntry(state.plan, ex, d.nr);
-    var line = prev
+    const d = state.draft;
+    const e = d.entries[ex] || (d.entries[ex] = { wh: "", last: "", saetze: "", tut: "" });
+    const prev = lastEntry(state.plan, ex, d.nr);
+    const line = prev
       ? "Letztes Mal: " + [prev.wh ? prev.wh + " WH" : null,
-                          prev.last ? "<b>" + esc(prev.last) + " kg</b>" : null,
+                          prev.last ? `<b>${esc(prev.last)} kg</b>` : null,
                           prev.saetze ? prev.saetze + " Sätze" : null,
                           prev.tut ? esc(prev.tut) : null].filter(Boolean).join(" · ")
       : "Erste Einheit mit dieser Übung";
 
-    var html = '<div class="card" data-ex="' + esc(ex) + '"><div class="ex-name">' + esc(ex) + "</div>" +
-               '<div class="last-line">' + line + '</div><div class="grid">';
-    FIELDS.forEach(function (f) {
-      var pv = prev ? prev[f.k] : "";
-      var gain = f.k === "last" && pv && num(e.last) > num(pv);
-      html += '<div class="fld' + (gain ? " gain" : "") + '"><label>' + f.label + "</label>" +
-        '<input inputmode="' + (f.k === "tut" ? "text" : "decimal") + '" data-ex="' + esc(ex) +
-        '" data-f="' + f.k + '" value="' + esc(e[f.k]) + '" placeholder="' + esc(pv || f.ph) +
-        '" aria-label="' + esc(ex + " " + f.label) + '">' +
-        '<span class="delta">' + (gain ? "+" + fmt(num(e.last) - num(pv)) + " kg" : "") + "</span></div>";
+    let html = `<div class="card" data-ex="${esc(ex)}"><div class="ex-name">${esc(ex)}</div>` +
+               `<div class="last-line">${line}</div><div class="grid">`;
+    FIELDS.forEach(f => {
+      const pv = prev ? prev[f.k] : "";
+      const valNum = num(e.last);
+      const pvNum = num(pv);
+      const gain = f.k === "last" && !isNaN(pvNum) && !isNaN(valNum) && valNum > pvNum;
+      
+      html += `<div class="fld${gain ? " gain" : ""}" data-fld="${f.k}"><label>${f.label}</label>` +
+        `<input inputmode="${f.k === "tut" ? "text" : "decimal"}" data-ex="${esc(ex)}" data-f="${f.k}" ` +
+        `value="${esc(e[f.k])}" placeholder="${esc(pv || f.ph)}" aria-label="${esc(ex + " " + f.label)}">` +
+        `<span class="delta">${gain ? "+" + fmt(valNum - pvNum) + " kg" : ""}</span></div>`;
     });
-    return html + "</div></div>";
+    return html + `</div></div>`;
   }
 
   function history() {
-    var html = best();
-    var all = state.log.slice().sort(function (a, b) {
-      return (b.date || "").localeCompare(a.date || "") || (b.savedAt || 0) - (a.savedAt || 0);
-    });
+    let html = best();
+    const all = [...state.log].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.savedAt || 0) - (a.savedAt || 0));
+    
     if (!all.length) {
-      return '<div class="h-empty">Noch keine Einheit gespeichert. Trag im Reiter „Training“ die erste ein – ab dann steht bei jeder Übung, was du beim letzten Mal geschafft hast.</div>';
+      return `<div class="h-empty">Noch keine Einheit gespeichert. Trag im Reiter „Training“ die erste ein – ab dann steht bei jeder Übung, was du beim letzten Mal geschafft hast.</div>`;
     }
-    html += '<div class="sec-title">Alle Einheiten</div>';
-    all.forEach(function (s) {
-      var p = PLANS[s.plan];
-      html += '<div class="h-item" style="--acc:' + p.color + '"><div class="h-hd">' +
-        '<span class="n">' + p.name + " · TE " + s.nr + "</span>" +
-        '<span class="d">' + deDate(s.date) + '</span></div><div class="h-rows">';
-      p.haupt.forEach(function (ex) {
-        var e = (s.entries || {})[ex] || {};
-        var v = [e.wh ? e.wh + " WH" : null, e.last ? e.last + " kg" : null,
-                 e.saetze ? e.saetze + " Sätze" : null, e.tut || null].filter(Boolean).join(" · ");
-        html += '<div class="h-row"><span class="ex">' + esc(ex) + '</span>' +
-                '<span class="val">' + (v ? esc(v) : "–") + "</span></div>";
+    
+    html += `<div class="sec-title">Alle Einheiten</div>`;
+    all.forEach(s => {
+      const p = PLANS[s.plan];
+      html += `<div class="h-item" style="--acc:${p.color}"><div class="h-hd">` +
+        `<span class="n">${p.name} · TE ${s.nr}</span>` +
+        `<span class="d">${deDate(s.date)}</span></div><div class="h-rows">`;
+      p.haupt.forEach(ex => {
+        const e = s.entries?.[ex] || {};
+        const v = [e.wh ? e.wh + " WH" : null, e.last ? e.last + " kg" : null,
+                   e.saetze ? e.saetze + " Sätze" : null, e.tut || null].filter(Boolean).join(" · ");
+        html += `<div class="h-row"><span class="ex">${esc(ex)}</span><span class="val">${v ? esc(v) : "–"}</span></div>`;
       });
-      checkItems(s.plan).forEach(function (ex) {
-        var on = s.done && s.done[ex];
-        html += '<div class="h-row"><span class="ex">' + esc(ex) + '</span>' +
-                '<span class="val' + (on ? " ok" : "") + '">' + (on ? "✓ erledigt" : "–") + "</span></div>";
+      checkItems(s.plan).forEach(ex => {
+        const on = s.done?.[ex];
+        html += `<div class="h-row"><span class="ex">${esc(ex)}</span><span class="val${on ? " ok" : ""}">${on ? "✓ erledigt" : "–"}</span></div>`;
       });
-      html += "</div>";
-      if (s.note) html += '<div class="h-note">' + esc(s.note) + "</div>";
-      html += '<div class="h-act"><button class="mini" data-edit="' + s.id + '">Bearbeiten</button>' +
-              '<button class="mini danger" data-del="' + s.id + '">Löschen</button></div></div>';
+      html += `</div>`;
+      if (s.note) html += `<div class="h-note">${esc(s.note)}</div>`;
+      html += `<div class="h-act"><button class="mini" data-edit="${s.id}">Bearbeiten</button>` +
+              `<button class="mini danger" data-del="${s.id}">Löschen</button></div></div>`;
     });
-    html += '<div class="foot"><button class="mini" id="csv">Alles als Tabelle kopieren</button>' +
-            "<p>Spalten sind mit Tab getrennt und lassen sich direkt in Excel oder Google Sheets einfügen.</p></div>";
-    return html;
+    
+    return html + `<div class="foot"><button class="mini" id="csv">Alles als Tabelle kopieren</button>` +
+            `<p>Spalten sind mit Tab getrennt und lassen sich direkt in Excel oder Google Sheets einfügen.</p></div>`;
   }
 
   function best() {
-    var rows = [];
-    [1, 2].forEach(function (p) {
-      PLANS[p].haupt.forEach(function (ex) {
-        var first = null, top = null;
-        sessionsOf(p).forEach(function (s) {
-          var v = num(((s.entries || {})[ex] || {}).last);
-          if (!isNaN(v)) { if (first === null) first = v; if (top === null || v > top) top = v; }
+    const rows = [];
+    [1, 2].forEach(p => {
+      PLANS[p].haupt.forEach(ex => {
+        let first = null, top = null;
+        sessionsOf(p).forEach(s => {
+          const v = num(s.entries?.[ex]?.last);
+          if (!isNaN(v)) { 
+            if (first === null) first = v; 
+            if (top === null || v > top) top = v; 
+          }
         });
-        if (top !== null) rows.push({ ex: ex, first: first, top: top, color: PLANS[p].color });
+        if (top !== null) rows.push({ ex, first, top, color: PLANS[p].color });
       });
     });
     if (!rows.length) return "";
-    var html = '<div class="sec-title">Bestwerte</div><div class="best"><table><thead><tr>' +
-      "<th>Übung</th><th>Start</th><th>Best</th><th>Δ</th></tr></thead><tbody>";
-    rows.forEach(function (r) {
-      var d = r.top - r.first;
-      html += '<tr><td style="color:' + r.color + '">' + esc(r.ex) + '</td>' +
-        '<td class="dim">' + fmt(r.first) + "</td><td>" + fmt(r.top) + "</td>" +
-        '<td style="color:' + (d > 0 ? "var(--gain)" : "var(--ice-faint)") + '">' +
-        (d > 0 ? "+" + fmt(d) : "–") + "</td></tr>";
+    
+    let html = `<div class="sec-title">Bestwerte</div><div class="best"><table><thead><tr>` +
+      `<th>Übung</th><th>Start</th><th>Best</th><th>Δ</th></tr></thead><tbody>`;
+    rows.forEach(r => {
+      const d = r.top - r.first;
+      html += `<tr><td style="color:${r.color}">${esc(r.ex)}</td>` +
+        `<td class="dim">${fmt(r.first)}</td><td>${fmt(r.top)}</td>` +
+        `<td style="color:${d > 0 ? "var(--gain)" : "var(--ice-faint)"}">${d > 0 ? "+" + fmt(d) : "–"}</td></tr>`;
     });
-    return html + "</tbody></table></div>";
+    return html + `</tbody></table></div>`;
   }
 
-  /* ---------------- events ---------------- */
+  /* ---------------- event delegation ---------------- */
+  let toastTimer = null;
   function toast(msg, warn) {
-    var t = document.getElementById("toast");
+    const t = document.getElementById("toast");
     if (!t) return;
     t.textContent = msg;
-    t.className = "toast show" + (warn ? " warn" : "");
-    setTimeout(function () { t.className = "toast" + (warn ? " warn" : ""); }, 2300);
+    t.className = `toast show${warn ? " warn" : ""}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = `toast${warn ? " warn" : ""}`; }, 2300);
   }
 
-  function wire() {
-    app.querySelectorAll(".tab").forEach(function (b) {
-      b.onclick = function () { state.tab = b.dataset.tab; render(); };
-    });
-    app.querySelectorAll(".plan-btn").forEach(function (b) {
-      b.onclick = function () {
-        state.plan = Number(b.dataset.plan); state.editing = null;
-        state.draft = newDraft(state.plan); render();
-      };
-    });
+  function setupGlobalListeners() {
+    app.addEventListener("click", e => {
+      const target = e.target.closest("button, .tab");
+      if (!target) return;
 
-    var date = document.getElementById("date");
-    if (date) date.onchange = function () { state.draft.date = date.value; };
-
-    app.querySelectorAll("[data-check]").forEach(function (b) {
-      b.onclick = function () {
-        var ex = b.dataset.check;
+      if (target.matches(".tab")) {
+        state.tab = target.dataset.tab;
+        render();
+      } else if (target.matches(".plan-btn")) {
+        state.plan = Number(target.dataset.plan);
+        state.editing = null;
+        state.draft = newDraft(state.plan);
+        render();
+      } else if (target.matches("[data-check]")) {
+        const ex = target.dataset.check;
         state.draft.done[ex] = !state.draft.done[ex];
-        var on = !!state.draft.done[ex];
-        b.setAttribute("aria-pressed", String(on));
-        var hint = b.querySelector(".hint");
+        const on = !!state.draft.done[ex];
+        target.setAttribute("aria-pressed", String(on));
+        const hint = target.querySelector(".hint");
         if (hint) hint.textContent = on ? "Erledigt" : "Antippen, wenn erledigt";
-      };
-    });
-
-    var note = document.getElementById("note");
-    if (note) note.oninput = function () { state.draft.note = note.value; };
-
-    app.querySelectorAll("input[data-ex]").forEach(function (inp) {
-      inp.oninput = function () { state.draft.entries[inp.dataset.ex][inp.dataset.f] = inp.value; };
-      inp.onblur = function () {
-        if (inp.dataset.f !== "last") return;
-        var card = inp.closest(".card");
-        if (!card) return;
-        var fresh = document.createElement("div");
-        fresh.innerHTML = exCard(card.dataset.ex);
-        card.replaceWith(fresh.firstChild);
-        wire();
-      };
-    });
-
-    var save = document.getElementById("save");
-    if (save) save.onclick = doSave;
-    var cancel = document.getElementById("cancel");
-    if (cancel) cancel.onclick = function () {
-      state.editing = null; state.draft = newDraft(state.plan); render();
-    };
-
-    app.querySelectorAll("[data-edit]").forEach(function (b) {
-      b.onclick = function () {
-        var s = state.log.filter(function (x) { return x.id === b.dataset.edit; })[0];
+      } else if (target.id === "save") {
+        doSave();
+      } else if (target.id === "cancel") {
+        state.editing = null;
+        state.draft = newDraft(state.plan);
+        render();
+      } else if (target.matches("[data-edit]")) {
+        const s = state.log.find(x => x.id === target.dataset.edit);
         if (!s) return;
-        state.plan = s.plan; state.editing = s.id;
+        state.plan = s.plan;
+        state.editing = s.id;
         state.draft = JSON.parse(JSON.stringify(s));
         state.draft.done = state.draft.done || {};
-        state.tab = "training"; render();
+        state.tab = "training";
+        render();
         window.scrollTo(0, 0);
-      };
-    });
-    app.querySelectorAll("[data-del]").forEach(function (b) {
-      b.onclick = function () {
-        state.log = state.log.filter(function (x) { return x.id !== b.dataset.del; });
+      } else if (target.matches("[data-del]")) {
+        state.log = state.log.filter(x => x.id !== target.dataset.del);
         renumber();
-        persist().then(function () { render(); toast("Einheit gelöscht", true); })
-                 .catch(function () { render(); toast("Löschen konnte nicht gespeichert werden", true); });
-      };
+        persist().then(() => { render(); toast("Einheit gelöscht", true); })
+                 .catch(() => { render(); toast("Löschen konnte nicht gespeichert werden", true); });
+      } else if (target.id === "csv") {
+        copyTable();
+      }
     });
 
-    var csv = document.getElementById("csv");
-    if (csv) csv.onclick = copyTable;
+    app.addEventListener("input", e => {
+      if (e.target.id === "date") {
+        state.draft.date = e.target.value;
+      } else if (e.target.id === "note") {
+        state.draft.note = e.target.value;
+      } else if (e.target.matches("input[data-ex]")) {
+        const { ex, f } = e.target.dataset;
+        if (state.draft.entries[ex]) {
+          state.draft.entries[ex][f] = e.target.value;
+        }
+        if (f === "last") updateGainUI(e.target);
+      }
+    });
+  }
+
+  function updateGainUI(input) {
+    const ex = input.dataset.ex;
+    const fld = input.closest(".fld");
+    if (!fld) return;
+
+    const prev = lastEntry(state.plan, ex, state.draft.nr);
+    const pvNum = prev ? num(prev.last) : NaN;
+    const valNum = num(input.value);
+    const gain = !isNaN(pvNum) && !isNaN(valNum) && valNum > pvNum;
+
+    fld.classList.toggle("gain", gain);
+    const deltaEl = fld.querySelector(".delta");
+    if (deltaEl) {
+      deltaEl.textContent = gain ? `+${fmt(valNum - pvNum)} kg` : "";
+    }
   }
 
   function renumber() {
-    [1, 2].forEach(function (p) {
-      sessionsOf(p).sort(function (a, b) {
-        return (a.date || "").localeCompare(b.date || "") || (a.savedAt || 0) - (b.savedAt || 0);
-      }).forEach(function (s, i) { s.nr = i + 1; });
+    [1, 2].forEach(p => {
+      sessionsOf(p).sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.savedAt || 0) - (b.savedAt || 0))
+                   .forEach((s, i) => { s.nr = i + 1; });
     });
   }
 
   function doSave() {
-    var d = state.draft;
-    var hasWeights = PLANS[d.plan].haupt.some(function (ex) {
-      var e = d.entries[ex] || {};
+    const d = state.draft;
+    const hasWeights = PLANS[d.plan].haupt.some(ex => {
+      const e = d.entries[ex] || {};
       return e.wh || e.last || e.saetze || e.tut;
     });
-    var hasChecks = Object.keys(d.done).some(function (k) { return d.done[k]; });
+    const hasChecks = Object.keys(d.done).some(k => d.done[k]);
     if (!hasWeights && !hasChecks) { toast("Noch nichts eingetragen", true); return; }
 
-    var wasEditing = state.editing;
+    const wasEditing = state.editing;
     if (wasEditing) {
-      state.log = state.log.map(function (s) {
-        return s.id === wasEditing ? JSON.parse(JSON.stringify(Object.assign({}, d, { id: wasEditing }))) : s;
-      });
+      state.log = state.log.map(s => s.id === wasEditing ? { ...JSON.parse(JSON.stringify(d)), id: wasEditing } : s);
     } else {
       d.id = "s" + Date.now() + Math.floor(Math.random() * 1000);
       d.savedAt = Date.now();
@@ -545,45 +567,58 @@
     renumber();
     state.editing = null;
     state.draft = newDraft(state.plan);
-    persist().then(function () {
-      render(); window.scrollTo(0, 0);
+    persist().then(() => {
+      render(); 
+      window.scrollTo(0, 0);
       toast(wasEditing ? "Änderungen gespeichert" : "Gespeichert – nächste Einheit steht bereit");
-    }).catch(function () {
-      render(); toast("Speichern fehlgeschlagen, bitte noch einmal versuchen", true);
+    }).catch(() => {
+      render(); 
+      toast("Speichern fehlgeschlagen, bitte noch einmal versuchen", true);
     });
   }
 
   function copyTable() {
-    var lines = ["Einheit\tTE\tDatum\tBlock\tÜbung\tWH\tLast (kg)\tSätze\tTUT\tErledigt\tNotiz"];
-    state.log.slice().sort(function (a, b) { return (a.date || "").localeCompare(b.date || ""); })
-      .forEach(function (s) {
-        var p = PLANS[s.plan];
-        lines.push([p.name, s.nr, deDate(s.date), "Warm-up", "Warm-up", "", "", "", "",
-                    s.done && s.done["Warm-up"] ? "x" : "", s.note || ""].join("\t"));
-        p.haupt.forEach(function (ex) {
-          var e = (s.entries || {})[ex] || {};
-          lines.push([p.name, s.nr, deDate(s.date), "Hauptteil", ex, e.wh || "", e.last || "",
-                      e.saetze || "", e.tut || "", "", ""].join("\t"));
+    const lines = ["Einheit\tTE\tDatum\tBlock\tÜbung\tWH\tLast (kg)\tSätze\tTUT\tErledigt\tNotiz"];
+    [...state.log].sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+      .forEach(s => {
+        const p = PLANS[s.plan];
+        lines.push([p.name, s.nr, deDate(s.date), "Warm-up", "Warm-up", "", "", "", "", s.done?.["Warm-up"] ? "x" : "", s.note || ""].join("\t"));
+        p.haupt.forEach(ex => {
+          const e = s.entries?.[ex] || {};
+          lines.push([p.name, s.nr, deDate(s.date), "Hauptteil", ex, e.wh || "", e.last || "", e.saetze || "", e.tut || "", "", ""].join("\t"));
         });
-        p.abschluss.forEach(function (ex) {
-          lines.push([p.name, s.nr, deDate(s.date), "Abschluss", ex, "", "", "", "",
-                      s.done && s.done[ex] ? "x" : "", ""].join("\t"));
+        p.abschluss.forEach(ex => {
+          lines.push([p.name, s.nr, deDate(s.date), "Abschluss", ex, "", "", "", "", s.done?.[ex] ? "x" : "", ""].join("\t"));
         });
       });
-    var text = lines.join("\n");
-    var ok = function () { toast("In die Zwischenablage kopiert"); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+
+    const text = lines.join("\n");
+    const ok = () => toast("In die Zwischenablage kopiert");
+    
+    if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(text).then(ok).catch(fallback);
-    } else fallback();
+    } else {
+      fallback();
+    }
+
     function fallback() {
-      var ta = document.createElement("textarea");
-      ta.value = text; document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); ok(); } catch (e) { toast("Kopieren nicht möglich", true); }
+      const ta = document.createElement("textarea");
+      ta.value = text; 
+      document.body.appendChild(ta); 
+      ta.select();
+      try { 
+        document.execCommand("copy"); 
+        ok(); 
+      } catch (e) { 
+        toast("Kopieren nicht möglich", true); 
+      }
       document.body.removeChild(ta);
     }
   }
 
-  load().then(function () {
+  // App-Initialisierung
+  setupGlobalListeners();
+  load().then(() => {
     state.ready = true;
     state.plan = sessionsOf(1).length > sessionsOf(2).length ? 2 : 1;
     render();
