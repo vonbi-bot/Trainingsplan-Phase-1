@@ -1,0 +1,592 @@
+<div id="app"><div class="boot">Lade Trainingsdaten …</div></div>
+
+<style>
+  :root {
+    --ink:      #0F141A;
+    --ink-2:    #18202A;
+    --ink-3:    #212C39;
+    --line:     #33414F;
+    --line-2:   #445468;
+    --ice:      #EEF4F9;
+    --ice-dim:  #B3C3D1;
+    --ice-faint:#8298AB;
+    --signal:   #FFB93D;
+    --gain:     #56E09A;
+    --plan1:    #7CC3F5;
+    --plan2:    #F5B48A;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+
+  #app, #app * { box-sizing: border-box; }
+
+  #app {
+    font-family: var(--sans);
+    background: var(--ink);
+    color: var(--ice);
+    min-height: 100vh;
+    margin: 0 auto;
+    max-width: 540px;
+    padding: 0 0 104px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .boot { padding: 48px 20px; color: var(--ice-dim); font-size: 15px; }
+
+  /* ================= header ================= */
+  .hdr {
+    position: sticky; top: 0; z-index: 20;
+    padding: 16px 16px 14px;
+    background: rgba(15, 20, 26, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .hdr-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font: 700 11px/1 var(--sans); letter-spacing: 0.22em; text-transform: uppercase; color: var(--ice-faint); }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    font: 600 13px/1 var(--sans);
+    background: none; border: 1px solid var(--line); color: var(--ice-dim);
+    padding: 9px 14px; border-radius: 999px; cursor: pointer;
+  }
+  .tab[aria-selected="true"] { color: var(--ink); background: var(--ice); border-color: var(--ice); }
+  .tab:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  .switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .plan-btn {
+    cursor: pointer; text-align: left;
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px; color: var(--ice-dim); min-height: 62px;
+  }
+  .plan-btn strong { display: block; font: 700 16px/1.2 var(--sans); color: var(--ice); }
+  .plan-btn span { display: block; margin-top: 5px; font: 600 12px/1 var(--mono); color: var(--ice-faint); }
+  .plan-btn[aria-pressed="true"] { background: var(--ink-3); border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
+  .plan-btn[aria-pressed="true"] strong { color: var(--acc); }
+  .plan-btn[aria-pressed="true"] span { color: var(--ice-dim); }
+  .plan-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  /* ================= session bar ================= */
+  .sess { display: flex; align-items: center; gap: 12px; padding: 18px 16px 4px; }
+  .sess-no { font: 700 30px/1 var(--mono); letter-spacing: -0.02em; }
+  .sess-of { font: 600 13px/1.3 var(--sans); color: var(--ice-faint); }
+  .sess-ex { padding: 6px 16px 0; font: 500 13px/1.5 var(--sans); color: var(--ice-faint); }
+  input[type="date"] {
+    margin-left: auto;
+    font: 600 14px/1 var(--mono); color: var(--ice);
+    background: var(--ink-2); border: 1px solid var(--line);
+    border-radius: 11px; padding: 11px 12px; min-height: 46px;
+  }
+  input[type="date"]:focus { outline: none; border-color: var(--signal); }
+
+  /* ================= blocks ================= */
+  .block-label {
+    display: flex; align-items: center; gap: 10px;
+    padding: 26px 16px 10px;
+    font: 700 11px/1 var(--sans); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ice-faint);
+  }
+  .block-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .card {
+    background: var(--ink-2); border: 1px solid var(--line);
+    border-radius: 16px; margin: 0 12px 10px; padding: 14px;
+  }
+  .ex-name { font: 700 18px/1.2 var(--sans); letter-spacing: 0.005em; }
+  .last-line { margin-top: 6px; font: 500 12.5px/1.5 var(--mono); color: var(--ice-faint); }
+  .last-line b { color: var(--signal); font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .fld { display: flex; flex-direction: column; gap: 6px; }
+  .fld label {
+    font: 700 10px/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ice-faint); text-align: center;
+  }
+  .fld input {
+    font: 700 20px/1 var(--mono); color: var(--ice); text-align: center;
+    background: var(--ink-3); border: 1px solid var(--line-2);
+    border-radius: 12px; min-height: 54px; padding: 4px 2px; width: 100%;
+  }
+  .fld input::placeholder { color: #6D8093; font-weight: 500; }
+  .fld input:focus { outline: none; border-color: var(--signal); box-shadow: 0 0 0 3px rgba(255,185,61,0.22); }
+  .fld.gain input { border-color: var(--gain); }
+  .fld .delta { height: 12px; text-align: center; font: 700 11px/1 var(--mono); color: var(--gain); }
+
+  /* ================= check rows ================= */
+  .check-row {
+    display: flex; align-items: center; gap: 14px; width: 100%;
+    background: var(--ink-2); border: 1px solid var(--line);
+    border-radius: 16px; margin: 0 12px 10px; padding: 14px;
+    width: calc(100% - 24px); cursor: pointer; text-align: left; color: var(--ice);
+  }
+  .check-row .box {
+    flex: 0 0 52px; height: 52px; border-radius: 14px;
+    border: 1px solid var(--line-2); background: var(--ink-3);
+    display: flex; align-items: center; justify-content: center;
+    font: 700 24px/1 var(--sans); color: #55677A;
+  }
+  .check-row .txt .ex-name { font-size: 17px; }
+  .check-row .txt .hint { margin-top: 4px; font: 500 12.5px/1.4 var(--sans); color: var(--ice-faint); }
+  .check-row[aria-pressed="true"] { border-color: var(--gain); background: rgba(86,224,154,0.08); }
+  .check-row[aria-pressed="true"] .box { background: var(--gain); border-color: var(--gain); color: var(--ink); }
+  .check-row[aria-pressed="true"] .hint { color: var(--gain); }
+  .check-row:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  textarea {
+    width: 100%; resize: vertical; min-height: 74px;
+    font: 500 15px/1.5 var(--sans); color: var(--ice);
+    background: var(--ink-3); border: 1px solid var(--line-2);
+    border-radius: 12px; padding: 12px;
+  }
+  textarea::placeholder { color: #6D8093; }
+  textarea:focus { outline: none; border-color: var(--signal); }
+
+  /* ================= save ================= */
+  .savebar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    max-width: 540px; margin: 0 auto;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(15,20,26,0) 0%, var(--ink) 38%);
+  }
+  .save {
+    width: 100%; min-height: 58px; cursor: pointer;
+    font: 700 17px/1 var(--sans);
+    color: var(--ink); background: var(--ice); border: none; border-radius: 16px;
+  }
+  .save.secondary { background: var(--ink-2); color: var(--ice); border: 1px solid var(--line-2); margin-top: 8px; min-height: 48px; font-size: 15px; }
+  .save:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
+    background: var(--gain); color: var(--ink);
+    font: 700 14px/1.3 var(--sans); text-align: center;
+    padding: 13px 18px; border-radius: 999px; z-index: 40; max-width: 90%;
+    opacity: 0; pointer-events: none; transition: opacity 0.22s ease;
+  }
+  .toast.show { opacity: 1; }
+  .toast.warn { background: var(--signal); }
+
+  /* ================= history ================= */
+  .h-empty { padding: 36px 20px; color: var(--ice-dim); font: 500 15px/1.65 var(--sans); }
+  .sec-title { padding: 22px 16px 10px; font: 700 11px/1 var(--sans); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ice-faint); }
+
+  .best { margin: 0 12px 6px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 16px; padding: 6px 14px 10px; }
+  .best table { width: 100%; border-collapse: collapse; }
+  .best th {
+    font: 700 10px/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ice-faint); text-align: right; padding: 10px 4px 8px;
+  }
+  .best th:first-child { text-align: left; }
+  .best td { font: 600 15px/1 var(--mono); text-align: right; padding: 12px 4px; border-top: 1px solid var(--line); }
+  .best td:first-child { text-align: left; font: 600 14.5px/1.2 var(--sans); }
+  .best td.dim { color: var(--ice-faint); font-weight: 500; }
+
+  .h-item {
+    margin: 0 12px 10px; padding: 14px;
+    background: var(--ink-2); border: 1px solid var(--line);
+    border-left: 4px solid var(--acc); border-radius: 16px;
+  }
+  .h-hd { display: flex; align-items: baseline; gap: 10px; }
+  .h-hd .n { font: 700 16px/1.2 var(--sans); color: var(--acc); }
+  .h-hd .d { margin-left: auto; font: 600 13px/1 var(--mono); color: var(--ice-dim); }
+  .h-rows { margin-top: 10px; display: grid; gap: 6px; }
+  .h-row { display: flex; gap: 10px; align-items: baseline; }
+  .h-row .ex { flex: 1; font: 600 14px/1.3 var(--sans); color: var(--ice); }
+  .h-row .val { font: 500 13px/1.3 var(--mono); color: var(--ice-dim); text-align: right; }
+  .h-row .val.ok { color: var(--gain); }
+  .h-note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font: 500 13.5px/1.5 var(--sans); color: var(--ice-dim); }
+  .h-act { display: flex; gap: 8px; margin-top: 12px; }
+  .mini {
+    font: 600 13px/1 var(--sans); cursor: pointer; min-height: 40px;
+    background: none; border: 1px solid var(--line-2); color: var(--ice-dim);
+    border-radius: 10px; padding: 0 14px;
+  }
+  .mini:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  .mini.danger { color: #FF9A80; }
+  .foot { padding: 20px 16px 8px; }
+  .foot p { margin: 12px 0 0; color: var(--ice-faint); font: 500 12.5px/1.6 var(--sans); }
+
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+  @media (max-width: 360px) {
+    .fld input { font-size: 18px; min-height: 50px; }
+    .sess-no { font-size: 26px; }
+  }
+</style>
+
+<script>
+(function () {
+  var KEY = "trainingslog:v2";
+  var TOTAL = 8;
+
+  var PLANS = {
+    1: { name: "Einheit 1", color: "var(--plan1)",
+         haupt: ["Rudern", "Kniebeuge", "Latziehen"], abschluss: ["Bizeps", "Rumpf"] },
+    2: { name: "Einheit 2", color: "var(--plan2)",
+         haupt: ["Bankdrücken", "Kreuzheben", "Schulterdrücken"], abschluss: ["Trizeps", "Rumpf"] }
+  };
+  var FIELDS = [
+    { k: "wh",     label: "WH",    ph: "8" },
+    { k: "last",   label: "kg",    ph: "60" },
+    { k: "saetze", label: "Sätze", ph: "3" },
+    { k: "tut",    label: "TUT",   ph: "3-0-1-0" }
+  ];
+
+  var state = { tab: "training", plan: 1, log: [], draft: null, editing: null, ready: false };
+  var app = document.getElementById("app");
+
+  /* ---------------- storage ---------------- */
+  function load() {
+    return window.storage.get(KEY).then(function (res) {
+      if (res && res.value) {
+        var p = JSON.parse(res.value);
+        if (p && Array.isArray(p.sessions)) state.log = p.sessions.map(migrate);
+      }
+    }).catch(function () {});
+  }
+  function migrate(s) {
+    s.done = s.done || {};
+    var cfg = PLANS[s.plan];
+    if (!cfg) return s;
+    cfg.abschluss.forEach(function (ex) {
+      var e = s.entries && s.entries[ex];
+      if (e && (e.wh || e.last || e.saetze || e.tut)) s.done[ex] = true;
+      if (s.entries) delete s.entries[ex];
+    });
+    if (s.warmup) s.done["Warm-up"] = true;
+    return s;
+  }
+  function persist() { return window.storage.set(KEY, JSON.stringify({ sessions: state.log })); }
+
+  /* ---------------- helpers ---------------- */
+  function sessionsOf(plan) {
+    return state.log.filter(function (s) { return s.plan === plan; })
+                    .sort(function (a, b) { return a.nr - b.nr; });
+  }
+  function checkItems(plan) { return ["Warm-up"].concat(PLANS[plan].abschluss); }
+  function lastEntry(plan, ex, beforeNr) {
+    var list = sessionsOf(plan).filter(function (s) { return s.nr < beforeNr; });
+    for (var i = list.length - 1; i >= 0; i--) {
+      var e = list[i].entries && list[i].entries[ex];
+      if (e && (e.wh || e.last || e.saetze || e.tut)) return e;
+    }
+    return null;
+  }
+  function num(v) { return parseFloat(String(v === undefined || v === null ? "" : v).replace(",", ".")); }
+  function fmt(n) { return String(Math.round(n * 100) / 100).replace(".", ","); }
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function deDate(iso) { if (!iso) return ""; var p = iso.split("-"); return p[2] + "." + p[1] + "." + p[0]; }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function newDraft(plan) {
+    var d = { plan: plan, nr: sessionsOf(plan).length + 1, date: today(), entries: {}, done: {}, note: "" };
+    PLANS[plan].haupt.forEach(function (ex) { d.entries[ex] = { wh: "", last: "", saetze: "", tut: "" }; });
+    return d;
+  }
+
+  /* ---------------- render ---------------- */
+  function render() {
+    if (!state.ready) return;
+    if (!state.draft || state.draft.plan !== state.plan) state.draft = newDraft(state.plan);
+    if (!state.editing) state.draft.nr = sessionsOf(state.plan).length + 1;
+
+    app.style.setProperty("--acc", PLANS[state.plan].color);
+    app.innerHTML = header() + (state.tab === "training" ? training() : history()) +
+      '<div class="toast" id="toast"></div>';
+    wire();
+  }
+
+  function header() {
+    var h = '<div class="hdr"><div class="hdr-top"><span class="brand">Trainingslog</span><span class="tabs">' +
+      '<button class="tab" data-tab="training" aria-selected="' + (state.tab === "training") + '">Training</button>' +
+      '<button class="tab" data-tab="verlauf" aria-selected="' + (state.tab === "verlauf") + '">Verlauf</button>' +
+      "</span></div>";
+    if (state.tab === "training") {
+      h += '<div class="switch">';
+      [1, 2].forEach(function (p) {
+        h += '<button class="plan-btn" data-plan="' + p + '" aria-pressed="' + (state.plan === p) + '" ' +
+             'style="--acc:' + PLANS[p].color + '"><strong>' + PLANS[p].name + "</strong>" +
+             "<span>" + sessionsOf(p).length + " / " + TOTAL + "</span></button>";
+      });
+      h += "</div>";
+    }
+    return h + "</div>";
+  }
+
+  function training() {
+    var d = state.draft, p = PLANS[state.plan];
+    var html = '<div class="sess"><span class="sess-no" style="color:' + p.color + '">TE ' + d.nr + "</span>" +
+      '<span class="sess-of">' + (state.editing ? "wird bearbeitet" : "von " + TOTAL) + "</span>" +
+      '<input type="date" id="date" value="' + esc(d.date) + '" aria-label="Datum der Einheit"></div>' +
+      '<div class="sess-ex">' + esc(p.haupt.join(" · ")) + "</div>";
+
+    html += '<div class="block-label">Warm-up</div>' + checkRow("Warm-up", "Antippen, wenn erledigt");
+
+    html += '<div class="block-label">Hauptteil</div>';
+    p.haupt.forEach(function (ex) { html += exCard(ex); });
+
+    html += '<div class="block-label">Abschluss</div>';
+    p.abschluss.forEach(function (ex) { html += checkRow(ex, "Antippen, wenn erledigt"); });
+
+    html += '<div class="block-label">Notiz</div><div class="card">' +
+      '<textarea id="note" placeholder="Wie lief die Einheit?">' + esc(d.note) + "</textarea></div>";
+
+    html += '<div class="savebar"><button class="save" id="save">' +
+      (state.editing ? "Änderungen speichern" : "TE " + d.nr + " speichern") + "</button>" +
+      (state.editing ? '<button class="save secondary" id="cancel">Bearbeiten abbrechen</button>' : "") + "</div>";
+    return html;
+  }
+
+  function checkRow(ex, hint) {
+    var on = !!state.draft.done[ex];
+    return '<button class="check-row" data-check="' + esc(ex) + '" aria-pressed="' + on + '">' +
+      '<span class="box" aria-hidden="true">✓</span><span class="txt">' +
+      '<span class="ex-name">' + esc(ex) + "</span>" +
+      '<span class="hint">' + (on ? "Erledigt" : hint) + "</span></span></button>";
+  }
+
+  function exCard(ex) {
+    var d = state.draft;
+    var e = d.entries[ex] || (d.entries[ex] = { wh: "", last: "", saetze: "", tut: "" });
+    var prev = lastEntry(state.plan, ex, d.nr);
+    var line = prev
+      ? "Letztes Mal: " + [prev.wh ? prev.wh + " WH" : null,
+                          prev.last ? "<b>" + esc(prev.last) + " kg</b>" : null,
+                          prev.saetze ? prev.saetze + " Sätze" : null,
+                          prev.tut ? esc(prev.tut) : null].filter(Boolean).join(" · ")
+      : "Erste Einheit mit dieser Übung";
+
+    var html = '<div class="card" data-ex="' + esc(ex) + '"><div class="ex-name">' + esc(ex) + "</div>" +
+               '<div class="last-line">' + line + '</div><div class="grid">';
+    FIELDS.forEach(function (f) {
+      var pv = prev ? prev[f.k] : "";
+      var gain = f.k === "last" && pv && num(e.last) > num(pv);
+      html += '<div class="fld' + (gain ? " gain" : "") + '"><label>' + f.label + "</label>" +
+        '<input inputmode="' + (f.k === "tut" ? "text" : "decimal") + '" data-ex="' + esc(ex) +
+        '" data-f="' + f.k + '" value="' + esc(e[f.k]) + '" placeholder="' + esc(pv || f.ph) +
+        '" aria-label="' + esc(ex + " " + f.label) + '">' +
+        '<span class="delta">' + (gain ? "+" + fmt(num(e.last) - num(pv)) + " kg" : "") + "</span></div>";
+    });
+    return html + "</div></div>";
+  }
+
+  function history() {
+    var html = best();
+    var all = state.log.slice().sort(function (a, b) {
+      return (b.date || "").localeCompare(a.date || "") || (b.savedAt || 0) - (a.savedAt || 0);
+    });
+    if (!all.length) {
+      return '<div class="h-empty">Noch keine Einheit gespeichert. Trag im Reiter „Training“ die erste ein – ab dann steht bei jeder Übung, was du beim letzten Mal geschafft hast.</div>';
+    }
+    html += '<div class="sec-title">Alle Einheiten</div>';
+    all.forEach(function (s) {
+      var p = PLANS[s.plan];
+      html += '<div class="h-item" style="--acc:' + p.color + '"><div class="h-hd">' +
+        '<span class="n">' + p.name + " · TE " + s.nr + "</span>" +
+        '<span class="d">' + deDate(s.date) + '</span></div><div class="h-rows">';
+      p.haupt.forEach(function (ex) {
+        var e = (s.entries || {})[ex] || {};
+        var v = [e.wh ? e.wh + " WH" : null, e.last ? e.last + " kg" : null,
+                 e.saetze ? e.saetze + " Sätze" : null, e.tut || null].filter(Boolean).join(" · ");
+        html += '<div class="h-row"><span class="ex">' + esc(ex) + '</span>' +
+                '<span class="val">' + (v ? esc(v) : "–") + "</span></div>";
+      });
+      checkItems(s.plan).forEach(function (ex) {
+        var on = s.done && s.done[ex];
+        html += '<div class="h-row"><span class="ex">' + esc(ex) + '</span>' +
+                '<span class="val' + (on ? " ok" : "") + '">' + (on ? "✓ erledigt" : "–") + "</span></div>";
+      });
+      html += "</div>";
+      if (s.note) html += '<div class="h-note">' + esc(s.note) + "</div>";
+      html += '<div class="h-act"><button class="mini" data-edit="' + s.id + '">Bearbeiten</button>' +
+              '<button class="mini danger" data-del="' + s.id + '">Löschen</button></div></div>';
+    });
+    html += '<div class="foot"><button class="mini" id="csv">Alles als Tabelle kopieren</button>' +
+            "<p>Spalten sind mit Tab getrennt und lassen sich direkt in Excel oder Google Sheets einfügen.</p></div>";
+    return html;
+  }
+
+  function best() {
+    var rows = [];
+    [1, 2].forEach(function (p) {
+      PLANS[p].haupt.forEach(function (ex) {
+        var first = null, top = null;
+        sessionsOf(p).forEach(function (s) {
+          var v = num(((s.entries || {})[ex] || {}).last);
+          if (!isNaN(v)) { if (first === null) first = v; if (top === null || v > top) top = v; }
+        });
+        if (top !== null) rows.push({ ex: ex, first: first, top: top, color: PLANS[p].color });
+      });
+    });
+    if (!rows.length) return "";
+    var html = '<div class="sec-title">Bestwerte</div><div class="best"><table><thead><tr>' +
+      "<th>Übung</th><th>Start</th><th>Best</th><th>Δ</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      var d = r.top - r.first;
+      html += '<tr><td style="color:' + r.color + '">' + esc(r.ex) + '</td>' +
+        '<td class="dim">' + fmt(r.first) + "</td><td>" + fmt(r.top) + "</td>" +
+        '<td style="color:' + (d > 0 ? "var(--gain)" : "var(--ice-faint)") + '">' +
+        (d > 0 ? "+" + fmt(d) : "–") + "</td></tr>";
+    });
+    return html + "</tbody></table></div>";
+  }
+
+  /* ---------------- events ---------------- */
+  function toast(msg, warn) {
+    var t = document.getElementById("toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.className = "toast show" + (warn ? " warn" : "");
+    setTimeout(function () { t.className = "toast" + (warn ? " warn" : ""); }, 2300);
+  }
+
+  function wire() {
+    app.querySelectorAll(".tab").forEach(function (b) {
+      b.onclick = function () { state.tab = b.dataset.tab; render(); };
+    });
+    app.querySelectorAll(".plan-btn").forEach(function (b) {
+      b.onclick = function () {
+        state.plan = Number(b.dataset.plan); state.editing = null;
+        state.draft = newDraft(state.plan); render();
+      };
+    });
+
+    var date = document.getElementById("date");
+    if (date) date.onchange = function () { state.draft.date = date.value; };
+
+    app.querySelectorAll("[data-check]").forEach(function (b) {
+      b.onclick = function () {
+        var ex = b.dataset.check;
+        state.draft.done[ex] = !state.draft.done[ex];
+        var on = !!state.draft.done[ex];
+        b.setAttribute("aria-pressed", String(on));
+        var hint = b.querySelector(".hint");
+        if (hint) hint.textContent = on ? "Erledigt" : "Antippen, wenn erledigt";
+      };
+    });
+
+    var note = document.getElementById("note");
+    if (note) note.oninput = function () { state.draft.note = note.value; };
+
+    app.querySelectorAll("input[data-ex]").forEach(function (inp) {
+      inp.oninput = function () { state.draft.entries[inp.dataset.ex][inp.dataset.f] = inp.value; };
+      inp.onblur = function () {
+        if (inp.dataset.f !== "last") return;
+        var card = inp.closest(".card");
+        if (!card) return;
+        var fresh = document.createElement("div");
+        fresh.innerHTML = exCard(card.dataset.ex);
+        card.replaceWith(fresh.firstChild);
+        wire();
+      };
+    });
+
+    var save = document.getElementById("save");
+    if (save) save.onclick = doSave;
+    var cancel = document.getElementById("cancel");
+    if (cancel) cancel.onclick = function () {
+      state.editing = null; state.draft = newDraft(state.plan); render();
+    };
+
+    app.querySelectorAll("[data-edit]").forEach(function (b) {
+      b.onclick = function () {
+        var s = state.log.filter(function (x) { return x.id === b.dataset.edit; })[0];
+        if (!s) return;
+        state.plan = s.plan; state.editing = s.id;
+        state.draft = JSON.parse(JSON.stringify(s));
+        state.draft.done = state.draft.done || {};
+        state.tab = "training"; render();
+        window.scrollTo(0, 0);
+      };
+    });
+    app.querySelectorAll("[data-del]").forEach(function (b) {
+      b.onclick = function () {
+        state.log = state.log.filter(function (x) { return x.id !== b.dataset.del; });
+        renumber();
+        persist().then(function () { render(); toast("Einheit gelöscht", true); })
+                 .catch(function () { render(); toast("Löschen konnte nicht gespeichert werden", true); });
+      };
+    });
+
+    var csv = document.getElementById("csv");
+    if (csv) csv.onclick = copyTable;
+  }
+
+  function renumber() {
+    [1, 2].forEach(function (p) {
+      sessionsOf(p).sort(function (a, b) {
+        return (a.date || "").localeCompare(b.date || "") || (a.savedAt || 0) - (b.savedAt || 0);
+      }).forEach(function (s, i) { s.nr = i + 1; });
+    });
+  }
+
+  function doSave() {
+    var d = state.draft;
+    var hasWeights = PLANS[d.plan].haupt.some(function (ex) {
+      var e = d.entries[ex] || {};
+      return e.wh || e.last || e.saetze || e.tut;
+    });
+    var hasChecks = Object.keys(d.done).some(function (k) { return d.done[k]; });
+    if (!hasWeights && !hasChecks) { toast("Noch nichts eingetragen", true); return; }
+
+    var wasEditing = state.editing;
+    if (wasEditing) {
+      state.log = state.log.map(function (s) {
+        return s.id === wasEditing ? JSON.parse(JSON.stringify(Object.assign({}, d, { id: wasEditing }))) : s;
+      });
+    } else {
+      d.id = "s" + Date.now() + Math.floor(Math.random() * 1000);
+      d.savedAt = Date.now();
+      state.log.push(JSON.parse(JSON.stringify(d)));
+    }
+    renumber();
+    state.editing = null;
+    state.draft = newDraft(state.plan);
+    persist().then(function () {
+      render(); window.scrollTo(0, 0);
+      toast(wasEditing ? "Änderungen gespeichert" : "Gespeichert – nächste Einheit steht bereit");
+    }).catch(function () {
+      render(); toast("Speichern fehlgeschlagen, bitte noch einmal versuchen", true);
+    });
+  }
+
+  function copyTable() {
+    var lines = ["Einheit\tTE\tDatum\tBlock\tÜbung\tWH\tLast (kg)\tSätze\tTUT\tErledigt\tNotiz"];
+    state.log.slice().sort(function (a, b) { return (a.date || "").localeCompare(b.date || ""); })
+      .forEach(function (s) {
+        var p = PLANS[s.plan];
+        lines.push([p.name, s.nr, deDate(s.date), "Warm-up", "Warm-up", "", "", "", "",
+                    s.done && s.done["Warm-up"] ? "x" : "", s.note || ""].join("\t"));
+        p.haupt.forEach(function (ex) {
+          var e = (s.entries || {})[ex] || {};
+          lines.push([p.name, s.nr, deDate(s.date), "Hauptteil", ex, e.wh || "", e.last || "",
+                      e.saetze || "", e.tut || "", "", ""].join("\t"));
+        });
+        p.abschluss.forEach(function (ex) {
+          lines.push([p.name, s.nr, deDate(s.date), "Abschluss", ex, "", "", "", "",
+                      s.done && s.done[ex] ? "x" : "", ""].join("\t"));
+        });
+      });
+    var text = lines.join("\n");
+    var ok = function () { toast("In die Zwischenablage kopiert"); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(fallback);
+    } else fallback();
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); ok(); } catch (e) { toast("Kopieren nicht möglich", true); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  load().then(function () {
+    state.ready = true;
+    state.plan = sessionsOf(1).length > sessionsOf(2).length ? 2 : 1;
+    render();
+  });
+})();
+</script>
